@@ -1,3 +1,3 @@
 # CodeOfWar
 COSC 370: AI Battlecode
-Collaborators: Jennifer Mince
+Collaborators: Jennifer Mince, Matt Manoly
