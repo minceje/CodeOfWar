@@ -1,2 +1,2 @@
-# Code_of_War
+# CodeOfWar
 COSC 370: AI Battlecode
