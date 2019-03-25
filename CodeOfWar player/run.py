@@ -1,3 +1,11 @@
+'''
+CodeOfWar 
+COSC 370 AI Battlecode Project
+Jennifer Mince, Carly Good, Matt Manoly, Zachary Taylor
+
+Code for Inspiration: https://github.com/AnPelec/Battlecode-2018/blob/master/Project%20Achilles/run.py
+'''
+
 import battlecode as bc
 import random
 import sys
@@ -20,24 +28,6 @@ if my_team == bc.Team.Red:
 	enemy_team = bc.Team.Blue
 random.seed(datetime.now())
 
-def find_free_locations_in_Mars():
-	component_number = 0
-	for i in range(marsHeight+1):
-		for j in range(marsWidth+1):
-			if (i, j) not in component:
-				temp_location = bc.MapLocation(bc.Planet.Mars, i, j)
-				try:
-					if marsMap.is_passable_terrain_at(temp_location):
-						#print('found free location on mars!')
-						locations.append((i, j))
-						flood_fill(i, j, component_number)
-						component_number += 1
-
-				except Exception as e:
-					print(i, j)
-					print('Error:', e)
-					# use this to show where the error was
-					traceback.print_exc()
 '''
 
 print("pystarted")
@@ -120,20 +110,82 @@ def workerWork(worker):
 				return
 			#if there isnt, then it seems to be stuck...and it must die
 			gc.disintegrate_unit(worker.id)
+            
+#Mars Info Finding and Rocket variables
+marsMap = gc.starting_map(bc.Planet.Mars)
+(marsHeight, marsWidth) = find_dimensions(bc.Planet.Mars)
 
+#gc.karbonite() >= 150 and number of units enough, then build rocket
+total_number_rockets = 0
+#add to this variable as rockets are built
+
+#method to find a safe location on Mars to land using known Mars info from the API
+def find_locations_Mars():
+	component_num = 0
+	for i in range(marsHeight+1):
+		for j in range(marsWidth+1):
+			if (i, j) not in component:
+				temp_loc = bc.MapLocation(bc.Planet.Mars, i, j)
+				try:
+					if marsMap.is_passable_terrain_at(temp_loc):
+						safe_locations.append((i, j)) #this stores the locations that are safe to use later
+						component_num += 1
+
+				except Exception as e:
+					print(i, j)
+					print('Error:', e)
+					traceback.print_exc()
+                    
+#now choose a safe location to launch to per rocket
+def findRocketLand(rocket):
+    #not sure what range to use
+    temp_range= 5
+    for t in range(temp_range):
+        return_value = random.choice(safe_locations) #calls locations from above method
+        if (t < temp_range -1):
+            continue
+        return bc.MapLocation(bc.Planet.Mars, return_value[0], return_value[1])
+        #returns the map location to land on
+        
+#method to launch the rocket    
+def launch(unit):
+    global total_number_rockets
+    
+    #if the round is the right number
+    if gc.round() < 700:
+        return
+    #need to send the units into rocket and check, yes enough are in the rocket so we can launch it
+    
+    garrison = unit.structure_garrison()
+    freeMarsLoc = findRocketLand(unit)
+        
+    if gc.can_launch_rocket(unit.id, free_loc):
+        #if can launch, launch
+        gc.launch_rocket(unit.id, free_loc) 
+        total_number_rockets -= 1
+        
+#method to unload and garrison the rocket once built    
+def unloadRocket(rocket):
+		garrison = unit.structure_garrison()
+		if len(garrison) > 0:
+			for d in directions:
+				if gc.can_unload(unit.id, d):
+					gc.unload(unit.id, d)
+                    
+find_locations_Mars()                    
 while True:
     # We only support Python 3, which means brackets around print()
     print('pyround:', gc.round(), 'time left:', gc.get_time_left_ms(), 'ms')
 
     # frequent try/catches are a good idea
     try:
-		worker_units = []
+        worker_units = []
         # walk through our units:
         for unit in gc.my_units():
 
 			#add all workers to a list to be operated on at once
-			if unit.unit_type == bc.UnitType.Worker:
-				worker_units.append(unit)
+            if unit.unit_type == bc.UnitType.Worker:
+                worker_units.append(unit)
 
             # first, factory logic
             if unit.unit_type == bc.UnitType.Factory:
@@ -148,7 +200,8 @@ while True:
                     gc.produce_robot(unit.id, bc.UnitType.Knight)
                     print('produced a knight!')
                     continue
-			'''
+                
+'''
             # first, let's look for nearby blueprints to work on
             location = unit.location
             if location.is_on_map():
@@ -181,7 +234,10 @@ while True:
 		#that fully without further discussing with team, however. -Matt
 		for worker in worker_units:
 			workerWork(worker)
-
+            
+       # if current_unit.unit_type == bc.UnitType.Rocket:
+           #unload_rocket(current_unit)
+           
     except Exception as e:
         print('Error:', e)
         # use this to show where the error was
