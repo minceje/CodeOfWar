@@ -32,7 +32,7 @@ def find_free_locations_in_Mars():
 						locations.append((i, j))
 						flood_fill(i, j, component_number)
 						component_number += 1
-						
+
 				except Exception as e:
 					print(i, j)
 					print('Error:', e)
@@ -61,14 +61,65 @@ Strategy:
     10-15 workers for karbonite harvesting
     factory produce knights, want to research that unit one at a time, do not go over 3-4 times
     workers replicate
-    
+
     Then create a rocket as soon as we can, multiple, and collect resources
     5-10 units work together to make rocket, per group of rockets (full capability is 12 at level 3)
-    
+
     Around round 700, get in rockets and fly to Mars
-    
+
     Mars: create as many units as possible to win
 '''
+
+#logic for worker units
+#CURRENT TODOS: Building rockets, repairing structures, reacting to enemy units
+def workerWork(worker):
+	for worker in workers:
+		#if there is a worker deficit and we have the resources to replicate,
+		#find a valid direction to do so.
+		if len(workers) < 10 and gc.karbonite() >= 60:
+			for dir in directions:
+				if gc.can_replicate(worker.id, dir):
+					replicate(worker.id, dir)
+					print('replicating!')
+					return #once an action is performed, that worker is done
+		#build on any existing nearby blueprints. Took this bit of code from
+		#below. Not entirely sure what the second param in this method is, and
+		#I couldnt find it documented anywhere.
+		nearby = gc.sense_nearby_units(worker.location.map_location(), 2)
+		for other in nearby:
+			if gc.can_build(worker.id, other.id):
+				gc.build(unit.id, other.id)
+				print('built a factory!')
+				return
+		#im not sure when the best times to build factories are, so for now
+		#its just an arbitrary 10% chance they try doing that instead of
+		#harvesting. This will only happen if there is enough Karbonite
+		#to make a factory in the first place
+		if gc.karbonite() > bc.UnitType.Factory.blueprint_cost():
+			fact_chance = random.randint(0,9)
+		else:
+			fact_chance = 1
+		#find a direction to harvest or set a blueprint
+		for dir in directions:
+			if fact_chance == 0:
+				if gc.can_blueprint(worker.id, bc.UnitType.Factory, dir):
+					gc.blueprint(worker.id, bc.UnitType.Factory, dir)
+					return
+			elif gc.can_harvest(worker.id, dir):
+				gc.harvest(worker.id, dir)
+				return
+		#if this part of the code is reached, then the only thing left to do is move
+		if gc.is_move_ready(worker.id):
+			choices = [] #list of possible directions
+			for dir in directions:
+				if gc.can_move(worker.id, dir):
+					choices.append(dir)
+			#if there is a valid square to move to, do so
+			if choices:
+				gc.move_robot(worker.id, random.choice(choices))
+				return
+			#if there isnt, then it seems to be stuck...and it must die
+			gc.disintegrate_unit(worker.id)
 
 while True:
     # We only support Python 3, which means brackets around print()
@@ -76,8 +127,13 @@ while True:
 
     # frequent try/catches are a good idea
     try:
+		worker_units = []
         # walk through our units:
         for unit in gc.my_units():
+
+			#add all workers to a list to be operated on at once
+			if unit.unit_type == bc.UnitType.Worker:
+				worker_units.append(unit)
 
             # first, factory logic
             if unit.unit_type == bc.UnitType.Factory:
@@ -92,7 +148,7 @@ while True:
                     gc.produce_robot(unit.id, bc.UnitType.Knight)
                     print('produced a knight!')
                     continue
-
+			'''
             # first, let's look for nearby blueprints to work on
             location = unit.location
             if location.is_on_map():
@@ -118,6 +174,13 @@ while True:
             # and if that fails, try to move
             elif gc.is_move_ready(unit.id) and gc.can_move(unit.id, d):
                 gc.move_robot(unit.id, d)
+			'''
+		#once all units have been looked at, perform worker logic
+		#the idea is to have each type of unit do all of their operations
+		#at once, then moving on to the next one. Don't want to implement
+		#that fully without further discussing with team, however. -Matt
+		for worker in worker_units:
+			workerWork(worker)
 
     except Exception as e:
         print('Error:', e)
@@ -133,13 +196,13 @@ while True:
     sys.stderr.flush()
 '''
 
-A MapLocation represents a concrete space on a given planet. It has x and y coordinates, 
+A MapLocation represents a concrete space on a given planet. It has x and y coordinates,
 in addition to the planet itself, as attributes.
 
 
-A Location represents the location of a robot. Whenever a robot is on a map, this object maps directly to a MapLocation object. 
-However, this is not always the case! A Location may also represent a point in space (as in the case of a rocket traveling to Mars), 
-or a space in a structure’s garrison. 
+A Location represents the location of a robot. Whenever a robot is on a map, this object maps directly to a MapLocation object.
+However, this is not always the case! A Location may also represent a point in space (as in the case of a rocket traveling to Mars),
+or a space in a structure’s garrison.
 Methods can be used to determine, more concretely, what a Location represents.
 '''
 #To Handle:
