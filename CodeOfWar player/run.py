@@ -21,11 +21,12 @@ print("pystarting")
 # Its constructor will connect to a running game.
 gc = bc.GameController()
 directions = list(bc.Direction)
-'''
+
 my_team = gc.team()
+'''
 enemy_team = bc.Team.Red
 if my_team == bc.Team.Red:
-	enemy_team = bc.Team.Blue
+    enemy_team = bc.Team.Blue
 random.seed(datetime.now())
 
 '''
@@ -42,8 +43,25 @@ random.seed(6137)
 gc.queue_research(bc.UnitType.Rocket)
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Knight)
+#the three levels if can be researched for Healer
+gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Healer) 
 
+#get our team from API
 my_team = gc.team()
+
+'''
+TODO:
+    -add to research
+    -Carly: Mage finish
+    -Zach: Knights and Rangers
+    -Jen: Healers and a move_unit method- done
+    -Matt: Factories and more Worker stuff
+    -Mars logic- all attacking once we get there, cannot build
+    -Matt: Figure out when to call rocket launches (how many units per rocket, how late in the round)
+'''
+
 
 '''
 Strategy:
@@ -59,57 +77,93 @@ Strategy:
 
     Mars: create as many units as possible to win
 '''
-
+#method to move any unit
+def move(unit, place, moveType):
+    #API returns any possible moves in list form
+    possible_directions = list(bc.Direction)
+    dir = random.choice(possible_directions)
+    #if unit can move and is ready to move, randomly move them to a new position
+    if gc.is_move_ready(unit.id) and gc.can_move(unit.id, dir):
+        gc.move_robot(unit.id, dir)
+        
 #logic for worker units
 #CURRENT TODOS: Building rockets, repairing structures, reacting to enemy units
 def workerWork(worker):
-	#if there is a worker deficit and we have the resources to replicate,
-	#find a valid direction to do so.
-	if num_workers < 10 and gc.karbonite() >= 60:
-		for dir in directions:
-			if gc.can_replicate(worker.id, dir):
-				replicate(worker.id, dir)
-				print('replicating!')
-				return #once an action is performed, that worker is done
-	#build on any existing nearby blueprints. Took this bit of code from
-	#below. Not entirely sure what the second param in this method is, and
-	#I couldnt find it documented anywhere.
-	nearby = gc.sense_nearby_units(worker.location.map_location(), 2)
-	for other in nearby:
-		if gc.can_build(worker.id, other.id):
-			gc.build(unit.id, other.id)
-			print('built a factory!')
-			return
-	#im not sure when the best times to build factories are, so for now
-	#its just an arbitrary 10% chance they try doing that instead of
-	#harvesting. This will only happen if there is enough Karbonite
-	#to make a factory in the first place
-	if gc.karbonite() > bc.UnitType.Factory.blueprint_cost():
-		fact_chance = random.randint(0,9)
-	else:
-		fact_chance = 1
-	#find a direction to harvest or set a blueprint
-	for dir in directions:
-		if fact_chance == 0:
-			if gc.can_blueprint(worker.id, bc.UnitType.Factory, dir):
-				gc.blueprint(worker.id, bc.UnitType.Factory, dir)
-				return
-		elif gc.can_harvest(worker.id, dir):
-			gc.harvest(worker.id, dir)
-			return
-	#if this part of the code is reached, then the only thing left to do is move
-	if gc.is_move_ready(worker.id):
-		choices = [] #list of possible directions
-		for dir in directions:
-			if gc.can_move(worker.id, dir):
-				choices.append(dir)
-		#if there is a valid square to move to, do so
-		if choices:
-			gc.move_robot(worker.id, random.choice(choices))
-			return
-		#if there isnt, then it seems to be stuck...and it must die
-		gc.disintegrate_unit(worker.id)
-
+    #if there is a worker deficit and we have the resources to replicate,
+    #find a valid direction to do so.
+    if num_workers < 10 and gc.karbonite() >= 60:
+        for dir in directions:
+            if gc.can_replicate(worker.id, dir):
+                replicate(worker.id, dir)
+                print('replicating!')
+                return #once an action is performed, that worker is done
+        #build on any existing nearby blueprints. Took this bit of code from
+        #below. Not entirely sure what the second param in this method is, and
+        #I couldnt find it documented anywhere.
+    nearby = gc.sense_nearby_units(worker.location.map_location(), 2)
+    for other in nearby:
+        if gc.can_build(worker.id, other.id):
+            gc.build(unit.id, other.id)
+            print('built a factory!')
+            return
+        #im not sure when the best times to build factories are, so for now
+        #its just an arbitrary 10% chance they try doing that instead of
+        #harvesting. This will only happen if there is enough Karbonite
+        #to make a factory in the first place
+    if gc.karbonite() > bc.UnitType.Factory.blueprint_cost():
+        fact_chance = random.randint(0,9)
+    else:
+        fact_chance = 1
+        #find a direction to harvest or set a blueprint
+    for dir in directions:
+        if fact_chance == 0:
+            if gc.can_blueprint(worker.id, bc.UnitType.Factory, dir):
+                gc.blueprint(worker.id, bc.UnitType.Factory, dir)
+                return
+        elif gc.can_harvest(worker.id, dir):
+            gc.harvest(worker.id, dir)
+            return
+        #if this part of the code is reached, then the only thing left to do is move
+        if gc.is_move_ready(worker.id):
+            choices = [] #list of possible directions
+            for dir in directions:
+                if gc.can_move(worker.id, dir):
+                    choices.append(dir)
+            #if there is a valid square to move to, do so
+            if choices:
+                gc.move_robot(worker.id, random.choice(choices))
+                return
+            #if there isnt, then it seems to be stuck...and it must die
+            gc.disintegrate_unit(worker.id)
+    
+#method to heal nearby units           
+def Healer_heal(unit):
+    if not gc.is_heal_ready(unit.id):
+        return
+    location = unit.location
+    #find nearby units on team
+    nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.attack_range(), my_team)
+    #if can heal, heal
+    for other in nearby:
+        if gc.can_heal(unit.id, other.id):
+            gc.heal(unit.id, other.id)
+            return 
+        
+#method to call when want to Healer overcharge         
+def Healer_overcharge(unit):
+    if not gc.is_overcharge_ready(unit.id):
+        return
+    #cannot overcharge if not at level 3
+    if bc.ResearchInfo().get_level(bc.UnitType.Healer) < 3:
+        return
+    location = unit.location
+    #get all possible targets arounc
+    possible_targets = sense_nearby_units_by_team(location.map_location(), unit.ability_range(), my_team)
+    for other in possible_targets:
+        if gc.can_heal(unit.id, other.id):
+            gc.heal(unit.id, other.id)
+            return
+          
 #Mars Info Finding and Rocket variables
 marsMap = gc.starting_map(bc.Planet.Mars)
 (marsHeight, marsWidth) = find_dimensions(bc.Planet.Mars)
@@ -120,21 +174,21 @@ total_number_rockets = 0
 
 #method to find a safe location on Mars to land using known Mars info from the API
 def find_locations_Mars():
-	component_num = 0
-	for i in range(marsHeight+1):
-		for j in range(marsWidth+1):
-			if (i, j) not in component:
-				temp_loc = bc.MapLocation(bc.Planet.Mars, i, j)
-				try:
-					if marsMap.is_passable_terrain_at(temp_loc):
-						safe_locations.append((i, j)) #this stores the locations that are safe to use later
-						component_num += 1
+    component_num = 0
+    for i in range(marsHeight+1):
+        for j in range(marsWidth+1):
+            if (i, j) not in component:
+                temp_loc = bc.MapLocation(bc.Planet.Mars, i, j)
+                try:
+                    if marsMap.is_passable_terrain_at(temp_loc):
+                        safe_locations.append((i, j)) #this stores the locations that are safe to use later
+                        component_num += 1
 
-				except Exception as e:
-					print(i, j)
-					print('Error:', e)
-					traceback.print_exc()
-
+                except Exception as e:
+                    print(i, j)
+                    print('Error:', e)
+                    traceback.print_exc()
+                    
 #now choose a safe location to launch to per rocket
 def findRocketLand(rocket):
     #not sure what range to use
@@ -172,6 +226,7 @@ def unloadRocket(rocket):
 					gc.unload(unit.id, d)
 
 find_locations_Mars()
+
 while True:
     # We only support Python 3, which means brackets around print()
     print('pyround:', gc.round(), 'time left:', gc.get_time_left_ms(), 'ms')
@@ -202,7 +257,7 @@ while True:
     try:
         # walk through our units:
         for unit in gc.my_units():
-			#add all workers to a list to be operated on at once
+   
             if unit.unit_type == bc.UnitType.Worker:
                 workerWork(unit)
 
@@ -247,7 +302,6 @@ while True:
             elif gc.is_move_ready(unit.id) and gc.can_move(unit.id, d):
                 gc.move_robot(unit.id, d)
 			'''
-
        # if current_unit.unit_type == bc.UnitType.Rocket:
            #unload_rocket(current_unit)
 
@@ -289,4 +343,4 @@ Methods can be used to determine, more concretely, what a Location represents.
         #rocketing to land in a good spot, not right away, but before the flood on Earth
         #karbonite, structures, other robots
         #unwalkable terrain
-        #meteor storms
+        #meteor storms- recheck square
