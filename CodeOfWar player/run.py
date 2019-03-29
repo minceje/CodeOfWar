@@ -1,5 +1,5 @@
 '''
-CodeOfWar 
+CodeOfWar
 COSC 370 AI Battlecode Project
 Jennifer Mince, Carly Good, Matt Manoly, Zachary Taylor
 
@@ -63,54 +63,53 @@ Strategy:
 #logic for worker units
 #CURRENT TODOS: Building rockets, repairing structures, reacting to enemy units
 def workerWork(worker):
-	for worker in workers:
-		#if there is a worker deficit and we have the resources to replicate,
-		#find a valid direction to do so.
-		if len(workers) < 10 and gc.karbonite() >= 60:
-			for dir in directions:
-				if gc.can_replicate(worker.id, dir):
-					replicate(worker.id, dir)
-					print('replicating!')
-					return #once an action is performed, that worker is done
-		#build on any existing nearby blueprints. Took this bit of code from
-		#below. Not entirely sure what the second param in this method is, and
-		#I couldnt find it documented anywhere.
-		nearby = gc.sense_nearby_units(worker.location.map_location(), 2)
-		for other in nearby:
-			if gc.can_build(worker.id, other.id):
-				gc.build(unit.id, other.id)
-				print('built a factory!')
-				return
-		#im not sure when the best times to build factories are, so for now
-		#its just an arbitrary 10% chance they try doing that instead of
-		#harvesting. This will only happen if there is enough Karbonite
-		#to make a factory in the first place
-		if gc.karbonite() > bc.UnitType.Factory.blueprint_cost():
-			fact_chance = random.randint(0,9)
-		else:
-			fact_chance = 1
-		#find a direction to harvest or set a blueprint
+	#if there is a worker deficit and we have the resources to replicate,
+	#find a valid direction to do so.
+	if num_workers < 10 and gc.karbonite() >= 60:
 		for dir in directions:
-			if fact_chance == 0:
-				if gc.can_blueprint(worker.id, bc.UnitType.Factory, dir):
-					gc.blueprint(worker.id, bc.UnitType.Factory, dir)
-					return
-			elif gc.can_harvest(worker.id, dir):
-				gc.harvest(worker.id, dir)
+			if gc.can_replicate(worker.id, dir):
+				replicate(worker.id, dir)
+				print('replicating!')
+				return #once an action is performed, that worker is done
+	#build on any existing nearby blueprints. Took this bit of code from
+	#below. Not entirely sure what the second param in this method is, and
+	#I couldnt find it documented anywhere.
+	nearby = gc.sense_nearby_units(worker.location.map_location(), 2)
+	for other in nearby:
+		if gc.can_build(worker.id, other.id):
+			gc.build(unit.id, other.id)
+			print('built a factory!')
+			return
+	#im not sure when the best times to build factories are, so for now
+	#its just an arbitrary 10% chance they try doing that instead of
+	#harvesting. This will only happen if there is enough Karbonite
+	#to make a factory in the first place
+	if gc.karbonite() > bc.UnitType.Factory.blueprint_cost():
+		fact_chance = random.randint(0,9)
+	else:
+		fact_chance = 1
+	#find a direction to harvest or set a blueprint
+	for dir in directions:
+		if fact_chance == 0:
+			if gc.can_blueprint(worker.id, bc.UnitType.Factory, dir):
+				gc.blueprint(worker.id, bc.UnitType.Factory, dir)
 				return
-		#if this part of the code is reached, then the only thing left to do is move
-		if gc.is_move_ready(worker.id):
-			choices = [] #list of possible directions
-			for dir in directions:
-				if gc.can_move(worker.id, dir):
-					choices.append(dir)
-			#if there is a valid square to move to, do so
-			if choices:
-				gc.move_robot(worker.id, random.choice(choices))
-				return
-			#if there isnt, then it seems to be stuck...and it must die
-			gc.disintegrate_unit(worker.id)
-            
+		elif gc.can_harvest(worker.id, dir):
+			gc.harvest(worker.id, dir)
+			return
+	#if this part of the code is reached, then the only thing left to do is move
+	if gc.is_move_ready(worker.id):
+		choices = [] #list of possible directions
+		for dir in directions:
+			if gc.can_move(worker.id, dir):
+				choices.append(dir)
+		#if there is a valid square to move to, do so
+		if choices:
+			gc.move_robot(worker.id, random.choice(choices))
+			return
+		#if there isnt, then it seems to be stuck...and it must die
+		gc.disintegrate_unit(worker.id)
+
 #Mars Info Finding and Rocket variables
 marsMap = gc.starting_map(bc.Planet.Mars)
 (marsHeight, marsWidth) = find_dimensions(bc.Planet.Mars)
@@ -135,57 +134,77 @@ def find_locations_Mars():
 					print(i, j)
 					print('Error:', e)
 					traceback.print_exc()
-                    
+
 #now choose a safe location to launch to per rocket
 def findRocketLand(rocket):
     #not sure what range to use
     temp_range= 5
-    for t in range(temp_range):
-        return_value = random.choice(safe_locations) #calls locations from above method
-        if (t < temp_range -1):
-            continue
+	for t in range(temp_range):
+	    return_value = random.choice(safe_locations) #calls locations from above method
+	    if (t < temp_range -1):
+	        continue
         return bc.MapLocation(bc.Planet.Mars, return_value[0], return_value[1])
         #returns the map location to land on
-        
-#method to launch the rocket    
+
+#method to launch the rocket
 def launch(unit):
     global total_number_rockets
-    
+
     #if the round is the right number
-    if gc.round() < 700:
+    if gc.round() > 700:
         return
     #need to send the units into rocket and check, yes enough are in the rocket so we can launch it
-    
+
     garrison = unit.structure_garrison()
     freeMarsLoc = findRocketLand(unit)
-        
+
     if gc.can_launch_rocket(unit.id, free_loc):
         #if can launch, launch
-        gc.launch_rocket(unit.id, free_loc) 
+        gc.launch_rocket(unit.id, free_loc)
         total_number_rockets -= 1
-        
-#method to unload and garrison the rocket once built    
+
+#method to unload and garrison the rocket once built
 def unloadRocket(rocket):
 		garrison = unit.structure_garrison()
 		if len(garrison) > 0:
 			for d in directions:
 				if gc.can_unload(unit.id, d):
 					gc.unload(unit.id, d)
-                    
-find_locations_Mars()                    
+
+find_locations_Mars()
 while True:
     # We only support Python 3, which means brackets around print()
     print('pyround:', gc.round(), 'time left:', gc.get_time_left_ms(), 'ms')
-
+	# count how much of each unit we have at the beginning of each turn
+	num_workers = 0
+	num_knights = 0
+	num_healers = 0
+	num_rangers = 0
+	num_mages = 0
+	total_number_factories = 0
+	total_number_rockets = 0
+	for unit in gc.my_units():
+		if unit.unit_type == bc.UnitType.Worker:
+			num_workers += 1
+		if unit.unit_type == bc.UnitType.Knight:
+			num_knights += 1
+		if unit.unit_type == bc.UnitType.Healer:
+			num_healers += 1
+		if unit.unit_type == bc.UnitType.Ranger:
+			num_rangers += 1
+		if unit.unit_type == bc.UnitType.Mage:
+			num_mages += 1
+		if unit.unit_type == bc.UnitType.Factory:
+			total_number_factories += 1
+		if unit.unit_type == bc.UnitType.Rockets:
+			total_number_rockets += 1
     # frequent try/catches are a good idea
     try:
-        worker_units = []
         # walk through our units:
         for unit in gc.my_units():
-
 			#add all workers to a list to be operated on at once
             if unit.unit_type == bc.UnitType.Worker:
-                worker_units.append(unit)
+                workerWork(unit)
 
             # first, factory logic
             if unit.unit_type == bc.UnitType.Factory:
@@ -200,8 +219,8 @@ while True:
                     gc.produce_robot(unit.id, bc.UnitType.Knight)
                     print('produced a knight!')
                     continue
-                
-'''
+
+			'''
             # first, let's look for nearby blueprints to work on
             location = unit.location
             if location.is_on_map():
@@ -228,16 +247,10 @@ while True:
             elif gc.is_move_ready(unit.id) and gc.can_move(unit.id, d):
                 gc.move_robot(unit.id, d)
 			'''
-		#once all units have been looked at, perform worker logic
-		#the idea is to have each type of unit do all of their operations
-		#at once, then moving on to the next one. Don't want to implement
-		#that fully without further discussing with team, however. -Matt
-		for worker in worker_units:
-			workerWork(worker)
-            
+
        # if current_unit.unit_type == bc.UnitType.Rocket:
            #unload_rocket(current_unit)
-           
+
     except Exception as e:
         print('Error:', e)
         # use this to show where the error was
