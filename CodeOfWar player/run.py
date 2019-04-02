@@ -57,26 +57,45 @@ random.seed(6137)
 
 # let's start off with some research!
 # we can queue as much as we want.
+#gc.queue_research(bc.UnitType.Rocket)
+#gc.queue_research(bc.UnitType.Worker)
+#gc.queue_research(bc.UnitType.Knight)
+#the three levels if can be researched for Healer
+#gc.queue_research(bc.UnitType.Healer)
+#gc.queue_research(bc.UnitType.Healer)
+#gc.queue_research(bc.UnitType.Healer)
+#For now here is the research order
 gc.queue_research(bc.UnitType.Rocket)
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Knight)
-#the three levels if can be researched for Healer
+gc.queue_research(bc.UnitType.Knight)
+gc.queue_research(bc.UnitType.Ranger)
+gc.queue_research(bc.UnitType.Worker)
+gc.queue_research(bc.UnitType.Worker)
+gc.queue_research(bc.UnitType.Ranger)
+gc.queue_research(bc.UnitType.Ranger)
+gc.queue_research(bc.UnitType.Knight)
+gc.queue_research(bc.UnitType.Rocket)
+gc.queue_research(bc.UnitType.Rocket)
+gc.queue_research(bc.UnitType.Worker)
+gc.queue_research(bc.UnitType.Mage)
 gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Mage)
 gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Mage)
 gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Mage)
 
 #get our team from API
 my_team = gc.team()
 
 '''
 TODO:
-    -add to research
-    -Carly: Mage finish
-    -Zach: Knights and Rangers
-    -Jen: Healers and a _unit method- done
-    -Matt: Factories and more Worker stuff
-    -Mars logic- all attacking once we get there, cannot build
-    -Matt: Figure out when to call rocket launches (how many units per rocket, how late in the round)
+    -add to research-
+    -Carly fix mage code for later use
+    -Zach: Knights and Rangers, Mars attack logic
+    -Jen: Rocket launch
+    -Matt: Factories and more Worker stuff, Earth Logic
 '''
 
 
@@ -243,7 +262,43 @@ def unloadRocket(rocket):
 					gc.unload(unit.id, d)
 
 find_locations_Mars()
-
+#method to move the rockets towards the rockets
+def moveUnitToRocket(unit):
+    if not gc.is_move_ready(unit.id):
+			return
+    #if ready to move
+    #get a location of the unit
+    location = unit.location.map_location()
+    #use directions from above
+    best = directions[0]
+    #set a distance
+    closest_distance = 100000
+    #find nearby rocket
+    nearby = gc.sense_nearby_units_by_type(location, unit.vision_range, bc.UnitType.Rocket)
+    #for each of nearby
+	for x in nearby:
+        next_location = x.location.map_location()
+        #now the distance is from that location to the next one found
+        current_distance = location.distance_squared_to(next_location)
+        #if closer than the set closest distance, go there
+        if current_distance < closest_distance:
+            closest_distance = current_distance
+            best = location.direction_to(next_location)
+        #moving the units based off current location and if they can move
+        range_index = 8
+        for i in range(8):
+            if directions[i] == best:
+                range_index = i
+                break
+        for i in range(4):
+            temp_index = (range_index + i + 9)%9
+            if gc.can_move(unit.id, directions[temp_index]):
+                gc.move_robot(unit.id, directions[temp_index])
+                return
+            temp_index = (range_index - i + 9)%9
+            if gc.can_move(unit.id, directions[temp_index]):
+                gc.move_robot(unit.id, directions[temp_index])
+                return
 while True:
     # We only support Python 3, which means brackets around print()
     print('pyround:', gc.round(), 'time left:', gc.get_time_left_ms(), 'ms')
@@ -291,7 +346,10 @@ while True:
                     gc.produce_robot(unit.id, bc.UnitType.Knight)
                     print('produced a knight!')
                     continue
-
+        #when we want to move to rockets call is
+        #moveUnitToRocket(unit)
+        #want to make sure it is right time in the game and we have enough units to fill the rockets
+        #launch(unit id of rocket to launch)
 			'''
             # first, let's look for nearby blueprints to work on
             location = unit.location
