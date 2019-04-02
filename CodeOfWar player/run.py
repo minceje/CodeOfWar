@@ -22,7 +22,24 @@ print("pystarting")
 gc = bc.GameController()
 directions = list(bc.Direction)
 
-my_team = gc.team()
+priority_rangers = {
+    bc.UnitType.Worker : 3
+    bc.UnitType.Knight : 2
+    bc.UnitType.Healer : 1
+    bc.UnitType.Ranger : 1
+    bc.UnitType.Mage : 1
+    bc.UnitType.Factory : 4
+    bc.UnitType.Rockets : 4
+}
+
+priority_healers = {
+    bc.UnitType.Worker : 4
+    bc.UnitType.Knight : 3
+    bc.UnitType.Healer : 2
+    bc.UnitType.Ranger : 1
+    bc.UnitType.Mage : 2
+}
+
 '''
 enemy_team = bc.Team.Red
 if my_team == bc.Team.Red:
@@ -46,7 +63,7 @@ gc.queue_research(bc.UnitType.Knight)
 #the three levels if can be researched for Healer
 gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Healer)
-gc.queue_research(bc.UnitType.Healer) 
+gc.queue_research(bc.UnitType.Healer)
 
 #get our team from API
 my_team = gc.team()
@@ -56,7 +73,7 @@ TODO:
     -add to research
     -Carly: Mage finish
     -Zach: Knights and Rangers
-    -Jen: Healers and a move_unit method- done
+    -Jen: Healers and a _unit method- done
     -Matt: Factories and more Worker stuff
     -Mars logic- all attacking once we get there, cannot build
     -Matt: Figure out when to call rocket launches (how many units per rocket, how late in the round)
@@ -78,14 +95,14 @@ Strategy:
     Mars: create as many units as possible to win
 '''
 #method to move any unit
-def move(unit, place, moveType):
+def move(unit):
     #API returns any possible moves in list form
     possible_directions = list(bc.Direction)
     dir = random.choice(possible_directions)
     #if unit can move and is ready to move, randomly move them to a new position
     if gc.is_move_ready(unit.id) and gc.can_move(unit.id, dir):
         gc.move_robot(unit.id, dir)
-        
+
 #logic for worker units
 #CURRENT TODOS: Building rockets, repairing structures, reacting to enemy units
 def workerWork(worker):
@@ -135,8 +152,8 @@ def workerWork(worker):
                 return
             #if there isnt, then it seems to be stuck...and it must die
             gc.disintegrate_unit(worker.id)
-    
-#method to heal nearby units           
+
+#method to heal nearby units
 def Healer_heal(unit):
     if not gc.is_heal_ready(unit.id):
         return
@@ -147,9 +164,9 @@ def Healer_heal(unit):
     for other in nearby:
         if gc.can_heal(unit.id, other.id):
             gc.heal(unit.id, other.id)
-            return 
-        
-#method to call when want to Healer overcharge         
+            return
+
+#method to call when want to Healer overcharge
 def Healer_overcharge(unit):
     if not gc.is_overcharge_ready(unit.id):
         return
@@ -163,7 +180,7 @@ def Healer_overcharge(unit):
         if gc.can_heal(unit.id, other.id):
             gc.heal(unit.id, other.id)
             return
-          
+
 #Mars Info Finding and Rocket variables
 marsMap = gc.starting_map(bc.Planet.Mars)
 (marsHeight, marsWidth) = find_dimensions(bc.Planet.Mars)
@@ -188,7 +205,7 @@ def find_locations_Mars():
                     print(i, j)
                     print('Error:', e)
                     traceback.print_exc()
-                    
+
 #now choose a safe location to launch to per rocket
 def findRocketLand(rocket):
     #not sure what range to use
@@ -257,7 +274,7 @@ while True:
     try:
         # walk through our units:
         for unit in gc.my_units():
-   
+
             if unit.unit_type == bc.UnitType.Worker:
                 workerWork(unit)
 
@@ -318,7 +335,7 @@ while True:
     sys.stdout.flush()
     sys.stderr.flush()
 
-	
+
 #Mage stuff
 #Inspiration taken from https://github.com/kmbrgandhi/tricycle_bot/blob/master/tricycle_bot_qualifying/Units/Mage.py
 import Units.sense_util as sense_util
@@ -444,7 +461,7 @@ def go_to_mars_sense(gc, unit, battle_locs, location, enemies, direction_to_coor
     if not gc.has_unit_at_location(target_loc):
         variables.mage_roles["go_to_mars"].remove(unit.id)
         return dir, attack, blink, move_then_attack, visible_enemies, closest_enemy, signals
-    
+
     #Checks if the rocket is ready and has a landing point
     if max(abs(target_loc.x - start_coords[0]), abs(target_loc.y - start_coords[1])) == 1:
         rocket = gc.sense_unit_at_location(target_loc)
@@ -483,7 +500,7 @@ def mage_sense(gc, unit, battle_locs, mage_roles, location, direction_to_coord, 
     move_then_attack = False
     visible_enemies = False
     start_time = time.time()
-    
+
     #If there are enemies, find the closest one, and then attack, or just goes on the rocket
     if len(enemies) > 0:
         visible_enemies = True
@@ -497,27 +514,27 @@ def mage_sense(gc, unit, battle_locs, mage_roles, location, direction_to_coord, 
                 if dist < closest_dist:
                     closest_dist = dist
                     closest_enemy = enemy
-        
+
         start_time = time.time()
-        
+
         if attack is not None:
             if closest_enemy is not None:
                 start_time = time.time()
-                    
+
                     start_time = time.time()
                     dir = sense_util.best_available_direction(gc, unit, [closest_enemy])
-                    
+
         else:
             if gc.is_move_ready(unit.id):
 
                 if closest_enemy is not None:
                     next_turn_loc = location.add(dir)
-                    
+
                     if attack is not None:
                         move_then_attack = True
-                    
+
     else:
-        
+
         if len(rocket_locs) > 0 and gc.round() > 660 and variables.curr_planet == bc.Planet.Earth:
             if dir is not None:
                 return dir, attack, blink, move_then_attack, visible_enemies, closest_enemy, signals
@@ -562,6 +579,40 @@ However, this is not always the case! A Location may also represent a point in s
 or a space in a structure’s garrison.
 Methods can be used to determine, more concretely, what a Location represents.
 '''
+
+#Ranger start
+#TODO: Implement logic to move in groups once enemy has been found
+def rangerLogic(unit):
+    #just to be sure only rangers receive ranger orders
+    if unit.unit_type != bc.UnitType.Ranger:
+        return
+
+    #if gc.round < 200:
+    #sense enemies that are nearby
+    nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.vision_range(), enemy_team)
+    if nearby:
+        rangerAttack(unit)
+    #however, if there is no nearby enemies, move randomly
+    #it's extremely important to move randomly at the start
+    #to find out more about surrounding area, and hopefully
+    #the enemy position. Could be improved to finding if we
+    #are near a wall and going the opposite direction
+    if not nearby:
+        if unit.is_move_ready():
+            move(unit)
+
+def rangerAttack(unit):
+    best_target = 0
+    for enemy in nearby:
+        #i don't know the proper code for this
+        #if enemy is too close, back away:
+            #code here
+        if priority_rangers[enemy] > best_target:
+            best_target = priority_rangers[enemy]
+            attack_target = enemy
+    if gc.can_attack(unit.id, attack_target.id):
+        gc.attack(unit.id, attack_target.id)
+
 #To Handle:
     #Earth:
         #impassible water spots
