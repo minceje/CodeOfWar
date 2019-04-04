@@ -23,30 +23,39 @@ gc = bc.GameController()
 directions = list(bc.Direction)
 
 priority_rangers = {
-    bc.UnitType.Worker : 3
-    bc.UnitType.Knight : 2
-    bc.UnitType.Healer : 1
-    bc.UnitType.Ranger : 1
-    bc.UnitType.Mage : 1
-    bc.UnitType.Factory : 4
+    bc.UnitType.Worker : 3,
+    bc.UnitType.Knight : 2,
+    bc.UnitType.Healer : 1,
+    bc.UnitType.Ranger : 1,
+    bc.UnitType.Mage : 1,
+    bc.UnitType.Factory : 4,
     bc.UnitType.Rockets : 4
 }
 
 priority_healers = {
-    bc.UnitType.Worker : 4
-    bc.UnitType.Knight : 3
-    bc.UnitType.Healer : 2
-    bc.UnitType.Ranger : 1
+    bc.UnitType.Worker : 4,
+    bc.UnitType.Knight : 3,
+    bc.UnitType.Healer : 2,
+    bc.UnitType.Ranger : 1,
     bc.UnitType.Mage : 2
 }
 
-'''
+approach_dir = {
+    (0,1) : bc.Direction.North,
+    (1,1) : bc.Direction.Northeast,
+    (1,0) : bc.Direction.East,
+    (1,-1) : bc.Direction.Southeast,
+    (0,-1) : bc.Direction.South,
+    (-1,-1) : bc.Direction.Southwest,
+    (-1,0) : bc.Direction.West,
+    (-1,1) : bc.Direction.Northwest,
+}
+
 enemy_team = bc.Team.Red
 if my_team == bc.Team.Red:
     enemy_team = bc.Team.Blue
 random.seed(datetime.now())
 
-'''
 
 print("pystarted")
 
@@ -65,11 +74,13 @@ random.seed(6137)
 #gc.queue_research(bc.UnitType.Healer)
 #gc.queue_research(bc.UnitType.Healer)
 #For now here is the research order
-gc.queue_research(bc.UnitType.Rocket)
 gc.queue_research(bc.UnitType.Worker)
-gc.queue_research(bc.UnitType.Knight)
-gc.queue_research(bc.UnitType.Knight)
 gc.queue_research(bc.UnitType.Ranger)
+gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Rocket)
+gc.queue_research(bc.UnitType.Knight)
+gc.queue_research(bc.UnitType.Knight)
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Ranger)
@@ -79,9 +90,7 @@ gc.queue_research(bc.UnitType.Rocket)
 gc.queue_research(bc.UnitType.Rocket)
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Mage)
-gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Mage)
-gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Mage)
 gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Mage)
@@ -122,55 +131,90 @@ def move(unit):
     if gc.is_move_ready(unit.id) and gc.can_move(unit.id, dir):
         gc.move_robot(unit.id, dir)
 
+#approach a given target, or at least try to
+def approach(unit, target):
+    x_diff = target.location.map_location().x - unit.location.map_location().x
+    y_diff = target.location.map_location().y - unit.location.map_location().y
+    if x_diff != 0:
+        x_move = x_diff/abs(x_diff)
+    if y_diff != 0:
+        y_move = y_diff/abs(y_diff)
+    dir = approach_dir[(x_move,y_move)]
+    if gc.is_move_ready(unit.id) and gc.can_move(unit.id,dir):
+        gc.move_robot(unit.id, dir)
+        return
+    #if cant move in optimal direction, and optimal direction was diag, try moving straight
+    if x_move != 0 and y_move != 0:
+        if x_diff > y_diff:
+            y_move = 0
+        else:
+            x_move = 0
+            dir = approach_dir[(x_move,y_move)]
+            if gc.is_move_ready(unit.id) and gc.can_move(unit.id,dir):
+                gc.move_robot(unit.id, dir)
+                return
+    #if nothing else works, move randomly
+    move(unit)
+
+
 #logic for worker units
-#CURRENT TODOS: Building rockets, repairing structures, reacting to enemy units
+#CURRENT TODOS: Building rockets, repairing structures
 def workerWork(worker):
     #if there is a worker deficit and we have the resources to replicate,
     #find a valid direction to do so.
     if num_workers < 10 and gc.karbonite() >= 60:
         for dir in directions:
             if gc.can_replicate(worker.id, dir):
-                replicate(worker.id, dir)
+                gc.replicate(worker.id, dir)
                 print('replicating!')
                 return #once an action is performed, that worker is done
-        #build on any existing nearby blueprints. Took this bit of code from
-        #below. Not entirely sure what the second param in this method is, and
-        #I couldnt find it documented anywhere.
+    #build on any existing nearby blueprints. Took this bit of code from
+    #below. Not entirely sure what the second param in this method is, and
+    #I couldnt find it documented anywhere.
     nearby = gc.sense_nearby_units(worker.location.map_location(), 2)
     for other in nearby:
         if gc.can_build(worker.id, other.id):
             gc.build(unit.id, other.id)
             print('built a factory!')
             return
-        #im not sure when the best times to build factories are, so for now
-        #its just an arbitrary 10% chance they try doing that instead of
-        #harvesting. This will only happen if there is enough Karbonite
-        #to make a factory in the first place
-    if gc.karbonite() > bc.UnitType.Factory.blueprint_cost():
-        fact_chance = random.randint(0,9)
-    else:
-        fact_chance = 1
-        #find a direction to harvest or set a blueprint
-    for dir in directions:
-        if fact_chance == 0:
+    #5 is an arbitrary limit for now
+    if gc.karbonite() > bc.UnitType.Factory.blueprint_cost() and total_number_factories < 5:
+        for dir in directions:
             if gc.can_blueprint(worker.id, bc.UnitType.Factory, dir):
                 gc.blueprint(worker.id, bc.UnitType.Factory, dir)
                 return
+    #find a direction to harvest or set a blueprint
+    for dir in directions:
         elif gc.can_harvest(worker.id, dir):
             gc.harvest(worker.id, dir)
             return
-        #if this part of the code is reached, then the only thing left to do is move
-        if gc.is_move_ready(worker.id):
-            choices = [] #list of possible directions
-            for dir in directions:
-                if gc.can_move(worker.id, dir):
-                    choices.append(dir)
-            #if there is a valid square to move to, do so
-            if choices:
-                gc.move_robot(worker.id, random.choice(choices))
-                return
-            #if there isnt, then it seems to be stuck...and it must die
-            gc.disintegrate_unit(worker.id)
+    #if this part of the code is reached, then the only thing left to do is move
+    if gc.is_move_ready(worker.id):
+        choices = [] #list of possible directions
+        for dir in directions:
+            if gc.can_move(worker.id, dir):
+                choices.append(dir)
+        #if there is a valid square to move to, do so
+        if choices:
+            gc.move_robot(worker.id, random.choice(choices))
+            return
+        #if there isnt, then it seems to be stuck...and it must die
+        gc.disintegrate_unit(worker.id)
+
+#produce units in factories, and unload them
+def factoryProduce(factory):
+    garrison = unit.structure_garrison()
+    if len(garrison) > 0:
+        for dir in directions:
+            if gc.can_unload(factory.id, dir):
+                gc.unload(factory.id, dir)
+    #going for 4:1 rangers:healers for now
+    if gc.can_produce_robot(factory.id, bc.UnitType.Ranger):
+        if num_healers * 4 < num_rangers:
+            gc.produce_robot(factory.id, bc.UnitType.Healer)
+            return
+        gc.produce_robot(factory.id, bc.UnitType.Ranger)
+        return
 
 #method to heal nearby units
 def Healer_heal(unit):
@@ -330,22 +374,15 @@ while True:
         # walk through our units:
         for unit in gc.my_units():
 
-            if unit.unit_type == bc.UnitType.Worker:
-                workerWork(unit)
-
-            # first, factory logic
             if unit.unit_type == bc.UnitType.Factory:
-                garrison = unit.structure_garrison()
-                if len(garrison) > 0:
-                    d = random.choice(directions)
-                    if gc.can_unload(unit.id, d):
-                        print('unloaded a knight!')
-                        gc.unload(unit.id, d)
-                        continue
-                elif gc.can_produce_robot(unit.id, bc.UnitType.Knight):
-                    gc.produce_robot(unit.id, bc.UnitType.Knight)
-                    print('produced a knight!')
-                    continue
+                factoryProduce(unit)
+            elif unit.unit_type == bc.UnitType.Worker:
+                workerWork(unit)
+            elif unit.unit_type == bc.UnitType.Healer:
+                Healer_heal(unit)
+            elif unit.unit_type == bc.UnitType.Ranger:
+                rangerLogic(unit)
+
         #when we want to move to rockets call is
         #moveUnitToRocket(unit)
         #want to make sure it is right time in the game and we have enough units to fill the rockets
