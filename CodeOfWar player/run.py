@@ -68,20 +68,8 @@ for i in range(init_units.__len__()):
 
 print("pystarted")
 
-# It's a good idea to try to keep your bots deterministic, to make debugging easier.
-# determinism isn't required, but it means that the same things will happen in every thing you run,
-# aside from turns taking slightly different amounts of time due to noise.
-random.seed(6137)
+random.seed(datetime.now())
 
-# let's start off with some research!
-# we can queue as much as we want.
-#gc.queue_research(bc.UnitType.Rocket)
-#gc.queue_research(bc.UnitType.Worker)
-#gc.queue_research(bc.UnitType.Knight)
-#the three levels if can be researched for Healer
-#gc.queue_research(bc.UnitType.Healer)
-#gc.queue_research(bc.UnitType.Healer)
-#gc.queue_research(bc.UnitType.Healer)
 #For now here is the research order
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Ranger)
@@ -129,14 +117,19 @@ Strategy:
 
     Mars: create as many units as possible to win
 '''
+
 #method to move any unit
 def move(unit):
     #API returns any possible moves in list form
     possible_directions = list(bc.Direction)
     choices = []
+	
+    #find only the moves that are legitimate moves
     for direct in possible_directions:
         if gc.can_move(unit.id, direct):
             choices.append(direct)
+
+    #if stuck inbetween things, kill self.
     if not choices:
         gc.disintegrate_unit(unit.id)
         return
@@ -145,19 +138,28 @@ def move(unit):
     if gc.is_move_ready(unit.id) and gc.can_move(unit.id, dir):
         gc.move_robot(unit.id, dir)
 
-#approach a given target, or at least try to
+#Try to approach a given target destination. (Note: NOT unit)
 def approach(unit, destination):
     global approach_dir
+    
+    #Find the difference in unit position and reduce it to a simple coordinate pair
+    #for use with the approach_dir dictionary.
     x_diff = destination.x - unit.location.map_location().x
     y_diff = destination.y - unit.location.map_location().y
     x_move = x_diff
     y_move = y_diff
+
+    #if there is an x_diff/y_diff, reduce it to a movement in one direction.
     if x_diff != 0:
         x_move = x_diff/abs(x_diff)
     if y_diff != 0:
         y_move = y_diff/abs(y_diff)
+
+    #if there is no moves to make, exit.
     if (x_move,y_move) == (0,0):
         return
+
+    #if we can move in an optimal direction, move that direction.
     dir = approach_dir[(x_move,y_move)]
     if gc.is_move_ready(unit.id) and gc.can_move(unit.id,dir):
         gc.move_robot(unit.id, dir)
@@ -180,6 +182,7 @@ def approach(unit, destination):
 #CURRENT TODOS: Building rockets, repairing structures
 def workerWork(worker):
     global num_workers, total_number_factories
+
     #if there is a worker deficit and we have the resources to replicate,
     #find a valid direction to do so.
     if num_workers < 10 and gc.karbonite() >= 60:
@@ -188,6 +191,7 @@ def workerWork(worker):
                 gc.replicate(worker.id, dir)
                 print('replicating!')
                 return #once an action is performed, that worker is done
+
     #build on any existing nearby blueprints. Took this bit of code from
     #below. Not entirely sure what the second param in this method is, and
     #I couldnt find it documented anywhere.
@@ -221,44 +225,61 @@ def workerWork(worker):
         #if there isnt, then it seems to be stuck...and it must die
         gc.disintegrate_unit(worker.id)
 
-#produce units in factories, and unload them
+#factoryProduce takes a factory and first to ungarrison any available units
+#then attempts to produce a ratio of a 4 rangers to 1 healer
 def factoryProduce(factory):
     global num_healers, num_rangers
     garrison = unit.structure_garrison()
+
+    #If a unit is garrisoned, release them in an available spot.
     if len(garrison) > 0:
         for dir in directions:
             if gc.can_unload(factory.id, dir):
                 gc.unload(factory.id, dir)
-    #going for 4:1 rangers:healers for now
+
+    #If the factory is available to produce another unit. If we have enough
+    #healers, produce rangers.
     if gc.can_produce_robot(factory.id, bc.UnitType.Ranger):
-        if num_healers * 4 < num_rangers:
+        if num_healers * 4 <= num_rangers:
             gc.produce_robot(factory.id, bc.UnitType.Healer)
-            return
-        gc.produce_robot(factory.id, bc.UnitType.Ranger)
+        else: 
+            gc.produce_robot(factory.id, bc.UnitType.Ranger)
         return
 
-#method to heal nearby units
+#Healer_heal finds units near the healer and attempts to heal them
 def Healer_heal(unit):
+    
+    #if we can't heal, exit
     if not gc.is_heal_ready(unit.id):
         return
+    
+    #find out current location
     location = unit.location
+
     #find nearby units on team
     nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.attack_range(), my_team)
-    #if can heal, heal
+
+    #if we can heal a unit, heal a unit.
     for other in nearby:
         if gc.can_heal(unit.id, other.id):
             gc.heal(unit.id, other.id)
             return
 
-#method to call when want to Healer overcharge
+#Healer_overcharge finds a nearby unit and restores their ability charge.
 def Healer_overcharge(unit):
+    
+    #if we can't overcharge, exit
     if not gc.is_overcharge_ready(unit.id):
         return
-    #cannot overcharge if not at level 3
+
+    #cannot overcharge if not at research level 3
     if bc.ResearchInfo().get_level(bc.UnitType.Healer) < 3:
         return
+
+    #find our location
     location = unit.location
-    #get all possible targets arounc
+
+    #get all possible targets around, and choose one to heal
     possible_targets = sense_nearby_units_by_team(location.map_location(), unit.ability_range(), my_team)
     for other in possible_targets:
         if gc.can_heal(unit.id, other.id):
@@ -369,46 +390,47 @@ def moveUnitToRocket(unit):
                 gc.move_robot(unit.id, directions[temp_index])
                 return
 
+#rangerAttack takes a unit and who is nearby to attempt an attack.
 def rangerAttack(unit, nearby):
     global priority_rangers
     best_target = 0
+
+    #we find the best unit to attack from the priority_rangers dictionary
+    #and attempt to attack the best unit.
     for enemy in nearby:
-        #i don't know the proper code for this
-        #if enemy is too close, back away:
-            #code here
         if priority_rangers[enemy.unit_type] > best_target:
             best_target = priority_rangers[enemy.unit_type]
             attack_target = enemy
+
+    #find the difference in our location and the enemy location for approach function
     x_diff = unit.location.map_location().x - attack_target.location.map_location().x
     y_diff = unit.location.map_location().y - attack_target.location.map_location().y
+
+    #if we can attack, and something is nearby to attack, do so. If not, approach them
     if gc.is_attack_ready(unit.id):
         if gc.can_attack(unit.id, attack_target.id):
             gc.attack(unit.id, attack_target.id)
         else:
             approach(unit,attack_target.location.map_location())
 
-#Ranger start
-#TODO: Implement logic to move in groups once enemy has been found
+#rangerLogic handles movement when no enemies are nearby, and attack orders.
 def rangerLogic(unit):
     global enemy_spawn
-    #just to be sure only rangers receive ranger orders
+    #Make sure only rangers get ranger orders.
     if unit.unit_type != bc.UnitType.Ranger:
         return
 
-    #if gc.round < 200:
-    #sense enemies that are nearby
+    #sense enemies that are nearby, and then attack them
     location = unit.location
     nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.vision_range, enemy_team)
     if nearby:
         rangerAttack(unit, nearby)
-    #however, if there is no nearby enemies, move randomly
-    #it's extremely important to move randomly at the start
-    #to find out more about surrounding area, and hopefully
-    #the enemy position. Could be improved to finding if we
-    #are near a wall and going the opposite direction
+
+    #if no one is nearby then approach the enemy spawn
     if not nearby:
         if gc.is_move_ready(unit.id):
             approach(unit, enemy_spawn)
+
 while True:
     # We only support Python 3, which means brackets around print()
     print('pyround:', gc.round(), 'time left:', gc.get_time_left_ms(), 'ms')
@@ -423,18 +445,18 @@ while True:
     for unit in gc.my_units():
         if unit.unit_type == bc.UnitType.Worker:
             num_workers += 1
-            if unit.unit_type == bc.UnitType.Knight:
-                num_knights += 1
-            if unit.unit_type == bc.UnitType.Healer:
-                num_healers += 1
-            if unit.unit_type == bc.UnitType.Ranger:
-                num_rangers += 1
-            if unit.unit_type == bc.UnitType.Mage:
-                num_mages += 1
-            if unit.unit_type == bc.UnitType.Factory:
-                total_number_factories += 1
-            if unit.unit_type == bc.UnitType.Rocket:
-                total_number_rockets += 1
+        if unit.unit_type == bc.UnitType.Knight:
+            num_knights += 1
+        if unit.unit_type == bc.UnitType.Healer:
+            num_healers += 1
+        if unit.unit_type == bc.UnitType.Ranger:
+            num_rangers += 1
+        if unit.unit_type == bc.UnitType.Mage:
+            num_mages += 1
+        if unit.unit_type == bc.UnitType.Factory:
+            total_number_factories += 1
+        if unit.unit_type == bc.UnitType.Rocket:
+            total_number_rockets += 1
     # frequent try/catches are a good idea
     try:
         # walk through our units:
@@ -471,20 +493,6 @@ while True:
     # it forces everything we've written this turn to be written to the manager.
     sys.stdout.flush()
     sys.stderr.flush()
-
-
-'''
-
-A MapLocation represents a concrete space on a given planet. It has x and y coordinates,
-in addition to the planet itself, as attributes.
-
-
-A Location represents the location of a robot. Whenever a robot is on a map, this object maps directly to a MapLocation object.
-However, this is not always the case! A Location may also represent a point in space (as in the case of a rocket traveling to Mars),
-or a space in a structure’s garrison.
-Methods can be used to determine, more concretely, what a Location represents.
-'''
-
 
 #To Handle:
     #Earth:
