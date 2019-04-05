@@ -1,71 +1,54 @@
 """
 Created on Mon Apr  1 21:03:44 2019
-
 Storing Mage code here for later
-
 """
 #Mage stuff
-#Inspiration taken from https://github.com/kmbrgandhi/tricycle_bot/blob/master/tricycle_bot_qualifying/Units/Mage.py
 
-def timestep(unit):
 
-    #Rename variables
-    location = unit.location
+priority_mage={
+    bc.UnitType.Worker : 2
+    bc.UnitType.Knight : 2
+    bc.UnitType.Healer : 3
+    bc.UnitType.Ranger : 1
+    bc.UnitType.Mage : 1
+    bc.UnitType.Factory : 4
+    bc.UnitType.Rockets : 4
+}
 
-    dir, attack_target, snipe, move_then_attack, visible_enemies, closest_enemy, signals = mage_sense(bc, unit, map_loc)
+#mageLogic is basicaly the same as rangerLogic
+def mageLogic(unit):
     
-    #If it can see an enemy close by, it will attack
-    if visible_enemies and closest_enemy is not None:
-        enemy_loc = closest_enemy.location.map_location()
-        f_f_quad = (int(enemy_loc.x / 5), int(enemy_loc.y / 5))
-       
-    #Move in range to attack, else just attacks
-    if move_then_attack:
-        #Checks if mage can move
-        if dir != None and bc.is_move_ready(unit.id) and bc.can_move(unit.id, dir):
-            bc.move_robot(unit.id, dir)
-
-        #Attacks a unit if it can
-        if attack_target is not None and bc.is_attack_ready(unit.id) and bc.can_attack(unit.id, attack_target.id):                
-            bc.attack(unit.id, attack_target.id)
-
-
-
-def mage_sense(gc, unit, location):
-    enemies = bc.can_sense_unit(location)
-  
-    signals = {}
-    #Changes variable values
-    dir = None
-    attack = None
-    blink = None
-    closest_enemy = None
-    move_then_attack = False
-    visible_enemies = False
-    start_time = time.time()
+    if unit.unit_type != bc.UnitType.Mage:
+        return
     
-    #If there are enemies, find the closest one, and then attack, or just goes on the rocket
-    if len(enemies) > 0:
-        visible_enemies = True
-        start_time = time.time()
-        closest_enemy = None
-        closest_dist = float('inf')
-        for enemy in enemies:
-            loc = enemy.location
-        
-        start_time = time.time()
-        
-        if attack is not None:
-            if closest_enemy is not None:
-                start_time = time.time()
-                    
-        else:
-            if bc.is_move_ready(unit.id):
+    #Attacks any nearby groups
+    nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.vision_range(), enemy_team)
+    if nearby:
+        mageAttack(unit)
 
-                if closest_enemy is not None:
-                    next_turn_loc = location.add(dir)
-                    
-                    if attack is not None:
-                        move_then_attack = True
+    if not nearby:
+        if gc.can_blink():
+            blink(unit)
+        elif unit.is_move_ready():
+            move(unit)
 
-    return dir, attack, blink, move_then_attack, visible_enemies, closest_enemy
+
+#Attacks
+def mageAttack(unit):
+    
+    best_target = 0
+    for enemy in nearby:
+        if priority_mage[enemy] > best_target:
+            best_target = priority_mage[enemy]
+            attack_target = enemy
+    if gc.can_attack(unit.id, attack_target.id):
+        gc.attack(unit.id, attack_target.id)
+
+
+#method for blink
+def blink(unit, location):
+    posDir = list(bc.Direction)
+    loc = random.choice(posDir)
+    if gc.is_blink_ready(unit.id):
+        gc.blink(unit.id, loc)
+        
