@@ -96,6 +96,7 @@ gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Mage)
 
 
+
 #method to move any unit
 def move(unit):
     #API returns any possible moves in list form
@@ -125,6 +126,7 @@ def approach(unit, location, destination):
     #for use with the approach_dir dictionary.
     x_diff = destination.x - location.x
     y_diff = destination.y - location.y
+
     x_move = x_diff
     y_move = y_diff
 
@@ -208,11 +210,10 @@ def workerWork(worker):
     #if this part of the code is reached, then the only thing left to do is move
     move(worker)
 
-cooldown = 0
 #factoryProduce takes a factory and first to ungarrison any available units
 #then attempts to produce a ratio of a 4 rangers to 1 healer
 def factoryProduce(factory):
-    global num_healers, num_rangers, release_units, cooldown, fight
+    global num_healers, num_rangers, release_units, fight
     garrison = unit.structure_garrison()
 
     if num_rangers + num_healers > 15 or fight:
@@ -239,8 +240,10 @@ def Healer_heal(unit):
     global enemy_spawn, my_team, full_vision
 
     location = unit.location
+
     #find nearby units on team
     nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.attack_range(), my_team)
+
     #if can heal, heal
     heal = False
     if gc.is_heal_ready(unit.id):
@@ -378,7 +381,7 @@ def moveUnitToRocket(unit,nearby):
 def rangerAttack(unit, nearby):
     global priority_rangers
     best_target = 0
-    targets = [] #list of targets from most valuable to least
+    targets = [] #list of targets from least valuable to most
     #we find the best unit to attack from the priority_rangers dictionary
     #and attempt to attack the best unit.
     for enemy in nearby:
@@ -456,8 +459,10 @@ while True:
             total_number_factories += 1
         if unit.unit_type == bc.UnitType.Rocket:
             total_number_rockets += 1
+            
     # shared unit vision
     full_vision = []
+
     try:
         # walk through our units:
         for unit in gc.my_units():
