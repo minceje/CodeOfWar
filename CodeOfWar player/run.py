@@ -65,6 +65,12 @@ for i in range(init_units.__len__()):
     if init_units.__getitem__(i).team == enemy_team:
         enemy_spawn = init_units.__getitem__(i).location.map_location()
 
+#flag for sending units into battle, flipped when an army has begun amassing
+release_units = False
+#flag for sending units to the rockets for escape
+escape = False
+fight = False
+
 
 print("pystarted")
 
@@ -75,14 +81,11 @@ gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Ranger)
 gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Healer)
+gc.queue_research(bc.UnitType.Worker)
+gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Rocket)
-gc.queue_research(bc.UnitType.Knight)
-gc.queue_research(bc.UnitType.Knight)
-gc.queue_research(bc.UnitType.Worker)
-gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Ranger)
 gc.queue_research(bc.UnitType.Ranger)
-gc.queue_research(bc.UnitType.Knight)
 gc.queue_research(bc.UnitType.Rocket)
 gc.queue_research(bc.UnitType.Rocket)
 gc.queue_research(bc.UnitType.Worker)
@@ -93,59 +96,37 @@ gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Mage)
 
 
-'''
-TODO:
-    -add to research-
-    -Carly fix mage code for later use
-    -Zach: Knights and Rangers, Mars attack logic
-    -Jen: Rocket launch
-    -Matt: Factories and more Worker stuff, Earth Logic
-'''
-
-
-'''
-Strategy:
-    First use given workers and given 100 Karbonite- replicate to make more? Worker research to upgrade them- costs 25 rounds
-    10-15 workers for karbonite harvesting
-    factory produce knights, want to research that unit one at a time, do not go over 3-4 times
-    workers replicate
-
-    Then create a rocket as soon as we can, multiple, and collect resources
-    5-10 units work together to make rocket, per group of rockets (full capability is 12 at level 3)
-
-    Around round 700, get in rockets and fly to Mars
-
-    Mars: create as many units as possible to win
-'''
 
 #method to move any unit
 def move(unit):
     #API returns any possible moves in list form
     possible_directions = list(bc.Direction)
     choices = []
-	
+
     #find only the moves that are legitimate moves
     for direct in possible_directions:
         if gc.can_move(unit.id, direct):
             choices.append(direct)
 
     #if stuck inbetween things, kill self.
-    if not choices:
-        gc.disintegrate_unit(unit.id)
-        return
-    dir = random.choice(choices)
-    #if unit can move and is ready to move, randomly move them to a new position
-    if gc.is_move_ready(unit.id) and gc.can_move(unit.id, dir):
-        gc.move_robot(unit.id, dir)
+    #if not choices:
+    #    gc.disintegrate_unit(unit.id)
+    #    return
+    if choices:
+        dir = random.choice(choices)
+        #if unit can move and is ready to move, randomly move them to a new position
+        if gc.is_move_ready(unit.id) and gc.can_move(unit.id, dir):
+            gc.move_robot(unit.id, dir)
 
 #Try to approach a given target destination. (Note: NOT unit)
-def approach(unit, destination):
+def approach(unit, location, destination):
     global approach_dir
-    
+
     #Find the difference in unit position and reduce it to a simple coordinate pair
     #for use with the approach_dir dictionary.
-    x_diff = destination.x - unit.location.map_location().x
-    y_diff = destination.y - unit.location.map_location().y
+    x_diff = destination.x - location.x
+    y_diff = destination.y - location.y
+
     x_move = x_diff
     y_move = y_diff
 
@@ -164,110 +145,125 @@ def approach(unit, destination):
     if gc.is_move_ready(unit.id) and gc.can_move(unit.id,dir):
         gc.move_robot(unit.id, dir)
         return
-    #if cant move in optimal direction, and optimal direction was diag, try moving straight
-    if x_move != 0 and y_move != 0:
+    #if cant move in optimal direction, try moving in a similar direction
+    if x_move == 0:
+        x_move = random.choice([-1,1])
+    elif y_move == 0:
+        y_move = random.choice([-1,1])
+    else:
         if x_diff > y_diff:
             y_move = 0
         else:
             x_move = 0
-            dir = approach_dir[(x_move,y_move)]
-            if gc.is_move_ready(unit.id) and gc.can_move(unit.id,dir):
-                gc.move_robot(unit.id, dir)
-                return
+    dir = approach_dir[(x_move,y_move)]
+    if gc.is_move_ready(unit.id) and gc.can_move(unit.id,dir):
+        gc.move_robot(unit.id, dir)
+        return
     #if nothing else works, move randomly
     move(unit)
 
 
 #logic for worker units
-#CURRENT TODOS: Building rockets, repairing structures
 def workerWork(worker):
-    global num_workers, total_number_factories
+    global num_workers, total_number_factories, escape, full_vision, fight
 
     #if there is a worker deficit and we have the resources to replicate,
     #find a valid direction to do so.
-    if num_workers < 10 and gc.karbonite() >= 60:
+    if num_workers < 7 and gc.karbonite() >= 60:
         for dir in directions:
             if gc.can_replicate(worker.id, dir):
                 gc.replicate(worker.id, dir)
-                print('replicating!')
                 return #once an action is performed, that worker is done
 
-    #build on any existing nearby blueprints. Took this bit of code from
-    #below. Not entirely sure what the second param in this method is, and
-    #I couldnt find it documented anywhere.
+    nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.vision_range, enemy_team)
+    if nearby:
+        fight = True
+        full_vision.extend(nearby)
+
+    #build on any existing nearby blueprints, or repair damaged structures
     nearby = gc.sense_nearby_units(worker.location.map_location(), 2)
     for other in nearby:
         if gc.can_build(worker.id, other.id):
-            gc.build(unit.id, other.id)
+            gc.build(worker.id, other.id)
             return
-    #5 is an arbitrary limit for now
-    if gc.karbonite() > bc.UnitType.Factory.blueprint_cost() and total_number_factories < 5:
+        elif other.health < other.max_health and gc.can_repair(worker.id, other.id):
+            gc.repair(worker.id, other.id)
+            return
+    #build factories until game reaches round 150, then focus on making units
+    if gc.karbonite() > bc.UnitType.Factory.blueprint_cost() and gc.round() < 150:
         for dir in directions:
             if gc.can_blueprint(worker.id, bc.UnitType.Factory, dir):
                 gc.blueprint(worker.id, bc.UnitType.Factory, dir)
-                print('built a factory!')
                 return
-    #find a direction to harvest or set a blueprint
+
+    if gc.karbonite() > bc.UnitType.Rocket.blueprint_cost() and gc.round() > 550:
+        for dir in directions:
+            if gc.can_blueprint(worker.id, bc.UnitType.Rocket, dir):
+                gc.blueprint(worker.id, bc.UnitType.Rocket, dir)
+                return
+
+    #find a direction to harvest
     for dir in directions:
         if gc.can_harvest(worker.id, dir):
             gc.harvest(worker.id, dir)
             return
     #if this part of the code is reached, then the only thing left to do is move
-    if gc.is_move_ready(worker.id):
-        choices = [] #list of possible directions
-        for dir in directions:
-            if gc.can_move(worker.id, dir):
-                choices.append(dir)
-        #if there is a valid square to move to, do so
-        if choices:
-            gc.move_robot(worker.id, random.choice(choices))
-            return
-        #if there isnt, then it seems to be stuck...and it must die
-        gc.disintegrate_unit(worker.id)
+    move(worker)
 
 #factoryProduce takes a factory and first to ungarrison any available units
 #then attempts to produce a ratio of a 4 rangers to 1 healer
 def factoryProduce(factory):
-    global num_healers, num_rangers
+    global num_healers, num_rangers, release_units, fight
     garrison = unit.structure_garrison()
 
+    if num_rangers + num_healers > 15 or fight:
+        release_units = True
+
     #If a unit is garrisoned, release them in an available spot.
-    if len(garrison) > 0:
+    if len(garrison) > 0 and release_units:
         for dir in directions:
             if gc.can_unload(factory.id, dir):
                 gc.unload(factory.id, dir)
-
+    if gc.round() > 650:
+        return
     #If the factory is available to produce another unit. If we have enough
     #healers, produce rangers.
-    if gc.can_produce_robot(factory.id, bc.UnitType.Ranger):
-        if num_healers * 4 <= num_rangers:
-            gc.produce_robot(factory.id, bc.UnitType.Healer)
-        else: 
+    if gc.can_produce_robot(factory.id, bc.UnitType.Ranger) and cooldown == 0:
+        if num_rangers < num_healers * 4:
             gc.produce_robot(factory.id, bc.UnitType.Ranger)
+        else:
+            gc.produce_robot(factory.id, bc.UnitType.Healer)
         return
 
 #Healer_heal finds units near the healer and attempts to heal them
 def Healer_heal(unit):
-    
-    #if we can't heal, exit
-    if not gc.is_heal_ready(unit.id):
-        return
-    
-    #find out current location
+    global enemy_spawn, my_team, full_vision
+
     location = unit.location
 
     #find nearby units on team
     nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.attack_range(), my_team)
 
-    #if we can heal a unit, heal a unit.
-    for other in nearby:
-        if gc.can_heal(unit.id, other.id):
-            gc.heal(unit.id, other.id)
+    #if can heal, heal
+    heal = False
+    if gc.is_heal_ready(unit.id):
+        lowest_health = unit
+        for other in nearby:
+            if other.health < lowest_health.health and other.health < other.max_health:
+                lowest_health = other
+                heal = True
+        if gc.can_heal(unit.id, lowest_health.id) and heal:
+            gc.heal(unit.id, lowest_health.id)
             return
+    #if no heal targets, walk towards the action
+    if full_vision:
+        approach(unit, unit.location.map_location(),full_vision[0].location.map_location())
+    else:
+        approach(unit, unit.location.map_location(),enemy_spawn)
 
 #Healer_overcharge finds a nearby unit and restores their ability charge.
 def Healer_overcharge(unit):
-    
+    global my_team
     #if we can't overcharge, exit
     if not gc.is_overcharge_ready(unit.id):
         return
@@ -288,20 +284,17 @@ def Healer_overcharge(unit):
 
 #Mars Info Finding and Rocket variables
 marsMap = gc.starting_map(bc.Planet.Mars)
-#(marsHeight, marsWidth) = gc.find_dimensions(bc.Planet.Mars)
-marsHeight = 10
-marsWidth = 10
+marsHeight = marsMap.height
+marsWidth = marsMap.width
 
-#gc.karbonite() >= 150 and number of units enough, then build rocket
-total_number_rockets = 0
 #add to this variable as rockets are built
 safe_locations = []
 #method to find a safe location on Mars to land using known Mars info from the API
 def find_locations_Mars():
     global safe_locations
     component_num = 0
-    for i in range(marsHeight+1):
-        for j in range(marsWidth+1):
+    for i in range(marsHeight):
+        for j in range(marsWidth):
             if (i, j) not in safe_locations:
                 temp_loc = bc.MapLocation(bc.Planet.Mars, i, j)
                 try:
@@ -312,7 +305,7 @@ def find_locations_Mars():
                 except Exception as e:
                     print(i, j)
                     print('Error:', e)
-                    traceback.print_exc()
+                    #traceback.print_exc()
 
 #now choose a safe location to launch to per rocket
 def findRocketLand(rocket):
@@ -328,20 +321,13 @@ def findRocketLand(rocket):
 
 #method to launch the rocket
 def launch(unit):
-    global total_number_rockets
-
-    #if the round is the right number
-    if gc.round() > 700:
-        return
-    #need to send the units into rocket and check, yes enough are in the rocket so we can launch it
 
     garrison = unit.structure_garrison()
-    freeMarsLoc = findRocketLand(unit)
+    free_loc = findRocketLand(unit)
 
     if gc.can_launch_rocket(unit.id, free_loc):
         #if can launch, launch
         gc.launch_rocket(unit.id, free_loc)
-        total_number_rockets -= 1
 
 #method to unload and garrison the rocket once built
 def unloadRocket(rocket):
@@ -353,7 +339,7 @@ def unloadRocket(rocket):
 
 find_locations_Mars()
 #method to move the rockets towards the rockets
-def moveUnitToRocket(unit):
+def moveUnitToRocket(unit,nearby):
     if not gc.is_move_ready(unit.id):
         return
     #if ready to move
@@ -363,10 +349,11 @@ def moveUnitToRocket(unit):
     best = directions[0]
     #set a distance
     closest_distance = 100000
-    #find nearby rocket
-    nearby = gc.sense_nearby_units_by_type(location, unit.vision_range, bc.UnitType.Rocket)
     #for each of nearby
     for x in nearby:
+        if gc.can_load(x.id, unit.id):
+            gc.load(x.id,unit.id)
+            return
         next_location = x.location.map_location()
         #now the distance is from that location to the next one found
         current_distance = location.distance_squared_to(next_location)
@@ -394,42 +381,57 @@ def moveUnitToRocket(unit):
 def rangerAttack(unit, nearby):
     global priority_rangers
     best_target = 0
-
+    targets = [] #list of targets from least valuable to most
     #we find the best unit to attack from the priority_rangers dictionary
     #and attempt to attack the best unit.
     for enemy in nearby:
+        #if enemy is too close, back away
+        if gc.is_move_ready(unit.id):
+            x_diff = unit.location.map_location().x - enemy.location.map_location().x
+            y_diff = unit.location.map_location().y - enemy.location.map_location().y
+            #backing away is done by reversing location and destination in approach function
+            if (x_diff * x_diff) + (y_diff * y_diff) < 20:
+                approach(unit,enemy.location.map_location(),unit.location.map_location())
         if priority_rangers[enemy.unit_type] > best_target:
             best_target = priority_rangers[enemy.unit_type]
-            attack_target = enemy
+            targets.append(enemy)
 
-    #find the difference in our location and the enemy location for approach function
-    x_diff = unit.location.map_location().x - attack_target.location.map_location().x
-    y_diff = unit.location.map_location().y - attack_target.location.map_location().y
-
-    #if we can attack, and something is nearby to attack, do so. If not, approach them
+    #if we can attack, and something is nearby to attack, do so.
     if gc.is_attack_ready(unit.id):
-        if gc.can_attack(unit.id, attack_target.id):
-            gc.attack(unit.id, attack_target.id)
-        else:
-            approach(unit,attack_target.location.map_location())
+        for i in range(len(targets)-1,-1,-1):
+            if gc.can_attack(unit.id, targets[i].id):
+                gc.attack(unit.id, targets[i].id)
+                return
+    if gc.is_move_ready(unit.id):
+        approach(unit,unit.location.map_location(),targets[-1].location.map_location())
 
 #rangerLogic handles movement when no enemies are nearby, and attack orders.
 def rangerLogic(unit):
-    global enemy_spawn
+    global enemy_spawn, enemy_team, escape, full_vision
     #Make sure only rangers get ranger orders.
     if unit.unit_type != bc.UnitType.Ranger:
         return
 
-    #sense enemies that are nearby, and then attack them
     location = unit.location
+    #if its time to escape, try to run to a rocket
+    if escape and unit.location.map_location().planet == bc.Planet.Earth:
+        nearby = gc.sense_nearby_units_by_type(location.map_location(), unit.vision_range, bc.UnitType.Rocket)
+        if nearby:
+            moveUnitToRocket(unit,nearby)
+            return
+
+    #sense enemies that are nearby, and then attack them
     nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.vision_range, enemy_team)
     if nearby:
+        full_vision.extend(nearby)
         rangerAttack(unit, nearby)
 
-    #if no one is nearby then approach the enemy spawn
-    if not nearby:
-        if gc.is_move_ready(unit.id):
-            approach(unit, enemy_spawn)
+    #if no one is nearby then approach the enemy, if no enemies are seen by anyone, approach enemy spawn
+    if not nearby and gc.is_move_ready(unit.id):
+        if full_vision:
+            approach(unit, unit.location.map_location(),full_vision[0].location.map_location())
+        else:
+            approach(unit, unit.location.map_location(),enemy_spawn)
 
 while True:
     # We only support Python 3, which means brackets around print()
@@ -457,12 +459,21 @@ while True:
             total_number_factories += 1
         if unit.unit_type == bc.UnitType.Rocket:
             total_number_rockets += 1
-    # frequent try/catches are a good idea
+            
+    # shared unit vision
+    full_vision = []
+
     try:
         # walk through our units:
         for unit in gc.my_units():
             location = unit.location
-            if unit.unit_type == bc.UnitType.Factory:
+            if unit.unit_type == bc.UnitType.Rocket:
+                escape = True
+                if unit.location.map_location().planet == bc.Planet.Mars:
+                    unloadRocket(unit)
+                elif len(unit.structure_garrison()) >= 8 or gc.round() >= 748 or unit.health < unit.max_health:
+                    launch(unit)
+            elif unit.unit_type == bc.UnitType.Factory:
                 factoryProduce(unit)
             elif unit.unit_type == bc.UnitType.Worker:
                 workerWork(unit)
@@ -493,20 +504,3 @@ while True:
     # it forces everything we've written this turn to be written to the manager.
     sys.stdout.flush()
     sys.stderr.flush()
-
-#To Handle:
-    #Earth:
-        #impassible water spots
-        #Factories
-        #Workers- pick up harvest karbonite, build, repair, blueprint, or replicate (1 to 3 at start)
-        #Knights- javelin
-        #Mages- fight
-        #Rangers- snipe
-        #Healers- heal
-        #other robots from opponent
-        #Rockets to mars: need to build, then find a correct space to land and survive
-    #Mars:
-        #rocketing to land in a good spot, not right away, but before the flood on Earth
-        #karbonite, structures, other robots
-        #unwalkable terrain
-        #meteor storms- recheck square
