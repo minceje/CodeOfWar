@@ -25,7 +25,7 @@ directions = list(bc.Direction)
 
 #get our team from API
 my_team = gc.team()
-
+#these dictionaries set up the priorities for each unit to interact with
 priority_rangers = {
     bc.UnitType.Worker : 3,
     bc.UnitType.Knight : 2,
@@ -43,7 +43,7 @@ priority_healers = {
     bc.UnitType.Ranger : 1,
     bc.UnitType.Mage : 2
 }
-
+#a directions dictionary used to approach
 approach_dir = {
     (0,1) : bc.Direction.North,
     (1,1) : bc.Direction.Northeast,
@@ -54,11 +54,11 @@ approach_dir = {
     (-1,0) : bc.Direction.West,
     (-1,1) : bc.Direction.Northwest,
 }
-
+#sets the my_team and enemy_team variables to know who to attack or help
 enemy_team = bc.Team.Red
 if my_team == bc.Team.Red:
     enemy_team = bc.Team.Blue
-
+#find the start map and original units at start of game
 start_map = gc.starting_map(bc.Planet.Earth)
 init_units = start_map.initial_units
 for i in range(init_units.__len__()):
@@ -76,7 +76,7 @@ print("pystarted")
 
 random.seed(datetime.now())
 
-#For now here is the research order
+#Research order 
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Ranger)
 gc.queue_research(bc.UnitType.Healer)
@@ -103,12 +103,10 @@ def move(unit):
     possible_directions = list(bc.Direction)
     choices = []
 
-    #find only the moves that are legitimate moves
+    #find only the moves that are valid moves
     for direct in possible_directions:
         if gc.can_move(unit.id, direct):
             choices.append(direct)
-
-    #if stuck inbetween things, kill self.
     #if not choices:
     #    gc.disintegrate_unit(unit.id)
     #    return
@@ -338,7 +336,7 @@ def unloadRocket(rocket):
                 gc.unload(unit.id, d)
 
 find_locations_Mars()
-#method to move the rockets towards the rockets
+#method to move the units towards the rockets
 def moveUnitToRocket(unit,nearby):
     if not gc.is_move_ready(unit.id):
         return
