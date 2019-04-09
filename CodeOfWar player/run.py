@@ -226,7 +226,7 @@ def factoryProduce(factory):
         return
     #If the factory is available to produce another unit. If we have enough
     #healers, produce rangers.
-    if gc.can_produce_robot(factory.id, bc.UnitType.Ranger) and cooldown == 0:
+    if gc.can_produce_robot(factory.id, bc.UnitType.Ranger):
         if num_rangers < num_healers * 4:
             gc.produce_robot(factory.id, bc.UnitType.Ranger)
         else:
