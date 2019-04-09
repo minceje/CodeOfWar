@@ -25,7 +25,7 @@ directions = list(bc.Direction)
 
 #get our team from API
 my_team = gc.team()
-
+#these dictionaries set up the priorities for each unit to interact with
 priority_rangers = {
     bc.UnitType.Worker : 3,
     bc.UnitType.Knight : 2,
@@ -43,7 +43,7 @@ priority_healers = {
     bc.UnitType.Ranger : 1,
     bc.UnitType.Mage : 2
 }
-
+#a directions dictionary used to approach
 approach_dir = {
     (0,1) : bc.Direction.North,
     (1,1) : bc.Direction.Northeast,
@@ -54,11 +54,11 @@ approach_dir = {
     (-1,0) : bc.Direction.West,
     (-1,1) : bc.Direction.Northwest,
 }
-
+#sets the my_team and enemy_team variables to know who to attack or help
 enemy_team = bc.Team.Red
 if my_team == bc.Team.Red:
     enemy_team = bc.Team.Blue
-
+#find the start map and original units at start of game
 start_map = gc.starting_map(bc.Planet.Earth)
 init_units = start_map.initial_units
 for i in range(init_units.__len__()):
@@ -76,7 +76,7 @@ print("pystarted")
 
 random.seed(datetime.now())
 
-#For now here is the research order
+#Research order 
 gc.queue_research(bc.UnitType.Worker)
 gc.queue_research(bc.UnitType.Ranger)
 gc.queue_research(bc.UnitType.Healer)
@@ -94,6 +94,7 @@ gc.queue_research(bc.UnitType.Mage)
 gc.queue_research(bc.UnitType.Mage)
 gc.queue_research(bc.UnitType.Healer)
 gc.queue_research(bc.UnitType.Mage)
+
 
 
 #method to move any unit
@@ -102,12 +103,10 @@ def move(unit):
     possible_directions = list(bc.Direction)
     choices = []
 
-    #find only the moves that are legitimate moves
+    #find only the moves that are valid moves
     for direct in possible_directions:
         if gc.can_move(unit.id, direct):
             choices.append(direct)
-
-    #if stuck inbetween things, kill self.
     #if not choices:
     #    gc.disintegrate_unit(unit.id)
     #    return
@@ -125,6 +124,7 @@ def approach(unit, location, destination):
     #for use with the approach_dir dictionary.
     x_diff = destination.x - location.x
     y_diff = destination.y - location.y
+
     x_move = x_diff
     y_move = y_diff
 
@@ -208,11 +208,10 @@ def workerWork(worker):
     #if this part of the code is reached, then the only thing left to do is move
     move(worker)
 
-cooldown = 0
 #factoryProduce takes a factory and first to ungarrison any available units
 #then attempts to produce a ratio of a 4 rangers to 1 healer
 def factoryProduce(factory):
-    global num_healers, num_rangers, release_units, cooldown, fight
+    global num_healers, num_rangers, release_units, fight
     garrison = unit.structure_garrison()
 
     if num_rangers + num_healers > 15 or fight:
@@ -227,7 +226,7 @@ def factoryProduce(factory):
         return
     #If the factory is available to produce another unit. If we have enough
     #healers, produce rangers.
-    if gc.can_produce_robot(factory.id, bc.UnitType.Ranger) and cooldown == 0:
+    if gc.can_produce_robot(factory.id, bc.UnitType.Ranger):
         if num_rangers < num_healers * 4:
             gc.produce_robot(factory.id, bc.UnitType.Ranger)
         else:
@@ -239,8 +238,10 @@ def Healer_heal(unit):
     global enemy_spawn, my_team, full_vision
 
     location = unit.location
+
     #find nearby units on team
     nearby = gc.sense_nearby_units_by_team(location.map_location(), unit.attack_range(), my_team)
+
     #if can heal, heal
     heal = False
     if gc.is_heal_ready(unit.id):
@@ -335,7 +336,7 @@ def unloadRocket(rocket):
                 gc.unload(unit.id, d)
 
 find_locations_Mars()
-#method to move the rockets towards the rockets
+#method to move the units towards the rockets
 def moveUnitToRocket(unit,nearby):
     if not gc.is_move_ready(unit.id):
         return
@@ -378,7 +379,7 @@ def moveUnitToRocket(unit,nearby):
 def rangerAttack(unit, nearby):
     global priority_rangers
     best_target = 0
-    targets = [] #list of targets from most valuable to least
+    targets = [] #list of targets from least valuable to most
     #we find the best unit to attack from the priority_rangers dictionary
     #and attempt to attack the best unit.
     for enemy in nearby:
@@ -456,8 +457,10 @@ while True:
             total_number_factories += 1
         if unit.unit_type == bc.UnitType.Rocket:
             total_number_rockets += 1
+            
     # shared unit vision
     full_vision = []
+
     try:
         # walk through our units:
         for unit in gc.my_units():
